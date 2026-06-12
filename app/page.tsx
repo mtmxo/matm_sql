@@ -30,6 +30,17 @@ function nomeLivello(n: number): string {
   return LIVELLI.find((l) => l.n === n)?.nome ?? "";
 }
 
+// Spiega in modo mirato perche il risultato non combacia con quello atteso.
+function spiegaDifferenza(atteso: QueryResult, ris: QueryResult): string {
+  if (ris.columns.length !== atteso.columns.length) {
+    return `Attese ${atteso.columns.length} colonne (${atteso.columns.join(", ")}), trovate ${ris.columns.length} (${ris.columns.join(", ") || "nessuna"}).`;
+  }
+  if (ris.rows.length !== atteso.rows.length) {
+    return `Numero di righe diverso: attese ${atteso.rows.length}, trovate ${ris.rows.length}.`;
+  }
+  return "Stesso numero di righe e colonne, ma alcuni valori non coincidono.";
+}
+
 export default function Home() {
   const [livelliAttivi, setLivelliAttivi] = useState<number[]>(LIVELLI.map((l) => l.n));
   const [opAttivi, setOpAttivi] = useState<Operatore[]>([...OPERATORI]);
@@ -41,6 +52,7 @@ export default function Home() {
   const [atteso, setAtteso] = useState<QueryResult | null>(null);
   const [tempo, setTempo] = useState<number | null>(null);
   const [esito, setEsito] = useState<"ok" | "ko" | null>(null);
+  const [dettaglio, setDettaglio] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [caricando, setCaricando] = useState(true);
   const idRef = useRef(0);
@@ -51,6 +63,7 @@ export default function Home() {
     setRisultato(null);
     setTempo(null);
     setEsito(null);
+    setDettaglio(null);
     setErrore(null);
 
     const gen = generatoriCompatibili(livelliAttivi, opAttivi);
@@ -96,11 +109,14 @@ export default function Home() {
       const ms = performance.now() - start;
       setRisultato(res);
       setTempo(ms);
-      setEsito(atteso && risultatiUguali(res, atteso) ? "ok" : "ko");
+      const corretto = atteso !== null && risultatiUguali(res, atteso);
+      setEsito(corretto ? "ok" : "ko");
+      setDettaglio(!corretto && atteso ? spiegaDifferenza(atteso, res) : null);
     } catch (err) {
       setRisultato(null);
       setTempo(null);
       setEsito(null);
+      setDettaglio(null);
       setErrore(err instanceof Error ? err.message : String(err));
     }
   }
@@ -226,6 +242,8 @@ export default function Home() {
                   <span className="esito-ko">Risultato diverso da quello atteso ✗</span>
                 )}
               </div>
+
+              {esito === "ko" && dettaglio && <p className="sub nota">{dettaglio}</p>}
 
               {errore && <div className="errore">Errore: {errore}</div>}
 
