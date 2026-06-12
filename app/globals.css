@@ -73,41 +73,21 @@ header {
   accent-color: var(--accent);
 }
 
-/* layout principale */
-.main {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  gap: 24px;
+/* esercizio corrente */
+section {
+  max-width: 720px;
 }
 
-@media (max-width: 760px) {
-  .main {
-    grid-template-columns: 1fr;
-  }
+.testata-esercizio {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
 }
 
-/* lista esercizi */
-aside button {
-  margin-bottom: 12px;
-}
-
-.lista {
-  list-style: none;
+.testata-esercizio h2 {
   margin: 0;
-  padding: 0;
-}
-
-.lista li {
-  border: 1px solid var(--bordo);
-  border-radius: 4px;
-  padding: 8px 10px;
-  margin-bottom: 6px;
-  cursor: pointer;
-}
-
-.lista li.attivo {
-  border-color: var(--accent);
-  border-left: 4px solid var(--accent);
 }
 
 .badge {
@@ -200,4 +180,5 @@ button:disabled {
   background: none;
   color: var(--accent);
   padding: 8px 0;
+  white-space: nowrap;
 }
