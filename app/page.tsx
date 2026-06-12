@@ -58,7 +58,13 @@ export default function Home() {
       return;
     }
     idRef.current += 1;
-    const e = nuovoEsercizio(gen, idRef.current);
+    // Evito di riproporre lo stesso schema di esercizio (non solo lo stesso
+    // testo): cosi non capita due volte di fila la stessa query con un numero diverso.
+    const precedente = esercizio?.tipo;
+    let e = nuovoEsercizio(gen, idRef.current);
+    for (let i = 0; i < 12 && e.tipo === precedente; i++) {
+      e = nuovoEsercizio(gen, idRef.current);
+    }
     setEsercizio(e);
     setAtteso(runQuery(database, e.soluzione));
   }
@@ -157,52 +163,62 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="caption">Tabelle di esempio</div>
-          {esercizio.tabelle.map((nome) => {
-            const t = TABLE_MAP[nome];
-            return (
-              <div key={nome}>
-                <div className="sub">{nome}</div>
-                <TableView data={{ columns: t.columns.map((c) => c.name), rows: t.rows }} />
+          <div className="lavoro">
+            <div className="riferimento">
+              <div className="caption">Tabelle di esempio</div>
+              {esercizio.tabelle.map((nome) => {
+                const t = TABLE_MAP[nome];
+                return (
+                  <div key={nome} className="tabella">
+                    <div className="sub">{nome}</div>
+                    <TableView data={{ columns: t.columns.map((c) => c.name), rows: t.rows }} />
+                  </div>
+                );
+              })}
+
+              {atteso && (
+                <>
+                  <div className="caption">Risultato atteso</div>
+                  <div className="tabella">
+                    <TableView data={atteso} />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="area-query">
+              <div className="caption">La tua query</div>
+              <textarea
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="SELECT ..."
+              />
+
+              <div className="barra-azioni">
+                <button onClick={esegui} disabled={!query.trim()}>
+                  Esegui
+                </button>
+                {tempo !== null && (
+                  <span className="tempo">Tempo: {tempo.toFixed(2)} ms</span>
+                )}
+                {esito === "ok" && <span className="esito-ok">Corretto ✓</span>}
+                {esito === "ko" && (
+                  <span className="esito-ko">Risultato diverso da quello atteso ✗</span>
+                )}
               </div>
-            );
-          })}
 
-          {atteso && (
-            <>
-              <div className="caption">Risultato atteso</div>
-              <TableView data={atteso} />
-            </>
-          )}
+              {errore && <div className="errore">Errore: {errore}</div>}
 
-          <div className="caption">La tua query</div>
-          <textarea
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="SELECT ..."
-          />
-
-          <div className="barra-azioni">
-            <button onClick={esegui} disabled={!query.trim()}>
-              Esegui
-            </button>
-            {tempo !== null && (
-              <span className="tempo">Tempo: {tempo.toFixed(2)} ms</span>
-            )}
-            {esito === "ok" && <span className="esito-ok">Corretto ✓</span>}
-            {esito === "ko" && (
-              <span className="esito-ko">Risultato diverso da quello atteso ✗</span>
-            )}
+              {risultato && (
+                <>
+                  <div className="caption">Il tuo risultato</div>
+                  <div className="tabella">
+                    <TableView data={risultato} />
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-
-          {errore && <div className="errore">Errore: {errore}</div>}
-
-          {risultato && (
-            <>
-              <div className="caption">Il tuo risultato</div>
-              <TableView data={risultato} />
-            </>
-          )}
         </section>
       )}
     </div>
