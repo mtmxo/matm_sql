@@ -2,19 +2,17 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Database } from "sql.js";
-import { getDb, runQuery, QueryResult } from "@/lib/db";
-import { TABLE_MAP } from "@/lib/data";
+import { creaDatabase, runQuery, QueryResult } from "@/lib/db";
+import { generaDataset, buildSchemaSql, Table } from "@/lib/data";
 import {
   OPERATORI,
   Operatore,
   Esercizio,
-  Difficolta,
+  LIVELLI,
   generatoriCompatibili,
   nuovoEsercizio,
 } from "@/lib/exercises";
 import TableView from "./TableView";
-
-const DIFFICOLTA: Difficolta[] = ["facile", "medio", "difficile"];
 
 // Confronto "morbido": stesse righe a prescindere dall'ordine.
 function risultatiUguali(a: QueryResult, b: QueryResult): boolean {
@@ -27,53 +25,66 @@ function risultatiUguali(a: QueryResult, b: QueryResult): boolean {
   return ra.every((v, i) => v === rb[i]);
 }
 
+function nomeLivello(n: number): string {
+  return LIVELLI.find((l) => l.n === n)?.nome ?? "";
+}
+
 export default function Home() {
-  const [db, setDb] = useState<Database | null>(null);
+  const [livelliAttivi, setLivelliAttivi] = useState<number[]>(LIVELLI.map((l) => l.n));
   const [opAttivi, setOpAttivi] = useState<Operatore[]>([...OPERATORI]);
-  const [diffAttive, setDiffAttive] = useState<Difficolta[]>([...DIFFICOLTA]);
   const [esercizio, setEsercizio] = useState<Esercizio | null>(null);
+  const [dataset, setDataset] = useState<Table[]>([]);
+  const [db, setDb] = useState<Database | null>(null);
   const [query, setQuery] = useState("");
   const [risultato, setRisultato] = useState<QueryResult | null>(null);
   const [atteso, setAtteso] = useState<QueryResult | null>(null);
   const [tempo, setTempo] = useState<number | null>(null);
   const [esito, setEsito] = useState<"ok" | "ko" | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
+  const [caricando, setCaricando] = useState(true);
   const idRef = useRef(0);
 
-  useEffect(() => {
-    getDb().then(setDb);
-  }, []);
-
-  // Carica un nuovo esercizio a caso tra quelli compatibili con i filtri.
-  function caricaNuovo(database: Database) {
-    const gen = generatoriCompatibili(diffAttive, opAttivi);
+  // Genera un nuovo esercizio (con i suoi dati) tra quelli compatibili coi filtri.
+  async function caricaNuovo() {
     setQuery("");
     setRisultato(null);
     setTempo(null);
     setEsito(null);
     setErrore(null);
+
+    const gen = generatoriCompatibili(livelliAttivi, opAttivi);
     if (gen.length === 0) {
       setEsercizio(null);
-      setAtteso(null);
+      setDataset([]);
+      setCaricando(false);
       return;
     }
+
+    setCaricando(true);
+    // pesco un esercizio evitando di ripetere lo stesso schema di fila
     idRef.current += 1;
-    // Evito di riproporre lo stesso schema di esercizio (non solo lo stesso
-    // testo): cosi non capita due volte di fila la stessa query con un numero diverso.
     const precedente = esercizio?.tipo;
     let e = nuovoEsercizio(gen, idRef.current);
     for (let i = 0; i < 12 && e.tipo === precedente; i++) {
       e = nuovoEsercizio(gen, idRef.current);
     }
+
+    // i dati scalano col livello dell'esercizio
+    const tabelle = generaDataset(e.livello);
+    const nuovoDb = await creaDatabase(buildSchemaSql(tabelle));
+
+    setDataset(tabelle);
+    setDb(nuovoDb);
     setEsercizio(e);
-    setAtteso(runQuery(database, e.soluzione));
+    setAtteso(runQuery(nuovoDb, e.soluzione));
+    setCaricando(false);
   }
 
-  // Rigenero l'esercizio quando il db è pronto o cambiano i filtri.
+  // Ricarico quando cambiano i filtri (e al primo avvio).
   useEffect(() => {
-    if (db) caricaNuovo(db);
+    caricaNuovo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db, opAttivi, diffAttive]);
+  }, [livelliAttivi, opAttivi]);
 
   function esegui() {
     if (!db || !esercizio) return;
@@ -99,9 +110,9 @@ export default function Home() {
     );
   }
 
-  function toggleDifficolta(d: Difficolta) {
-    setDiffAttive((prev) =>
-      prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]
+  function toggleLivello(n: number) {
+    setLivelliAttivi((prev) =>
+      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]
     );
   }
 
@@ -113,23 +124,23 @@ export default function Home() {
 
         <div className="filtri">
           <div>
-            <div className="caption">Difficolta</div>
+            <div className="caption">Livello</div>
             <div className="gruppo-filtri">
-              {DIFFICOLTA.map((d) => (
-                <label key={d} className="chk">
+              {LIVELLI.map((l) => (
+                <label key={l.n} className="chk">
                   <input
                     type="checkbox"
-                    checked={diffAttive.includes(d)}
-                    onChange={() => toggleDifficolta(d)}
+                    checked={livelliAttivi.includes(l.n)}
+                    onChange={() => toggleLivello(l.n)}
                   />
-                  {d}
+                  {l.n}. {l.nome}
                 </label>
               ))}
             </div>
           </div>
 
           <div>
-            <div className="caption">Operatori ammessi</div>
+            <div className="caption">Operatori che vuoi praticare</div>
             <div className="gruppo-filtri">
               {OPERATORI.map((op) => (
                 <label key={op} className="chk">
@@ -142,23 +153,24 @@ export default function Home() {
                 </label>
               ))}
             </div>
+            <p className="sub nota">Vedi solo esercizi che usano gli operatori spuntati: togli quelli che non hai ancora studiato.</p>
           </div>
         </div>
       </header>
 
-      {!db && <p>Caricamento database…</p>}
+      {caricando && <p>Caricamento…</p>}
 
-      {db && !esercizio && (
-        <p className="sub">Nessun esercizio con questi filtri. Seleziona almeno una difficolta e gli operatori necessari.</p>
+      {!caricando && !esercizio && (
+        <p className="sub">Nessun esercizio con questi filtri. Seleziona almeno un livello e gli operatori necessari.</p>
       )}
 
-      {db && esercizio && (
+      {!caricando && esercizio && (
         <section>
           <div className="testata-esercizio">
             <h2>
-              <span className="badge">{esercizio.difficolta}</span> {esercizio.domanda}
+              <span className="badge">Liv. {esercizio.livello} · {nomeLivello(esercizio.livello)}</span> {esercizio.domanda}
             </h2>
-            <button className="secondario" onClick={() => caricaNuovo(db)}>
+            <button className="secondario" onClick={caricaNuovo}>
               Salta →
             </button>
           </div>
@@ -167,10 +179,11 @@ export default function Home() {
             <div className="riferimento">
               <div className="caption">Tabelle di esempio</div>
               {esercizio.tabelle.map((nome) => {
-                const t = TABLE_MAP[nome];
+                const t = dataset.find((x) => x.name === nome);
+                if (!t) return null;
                 return (
                   <div key={nome} className="tabella">
-                    <div className="sub">{nome}</div>
+                    <div className="sub">{nome} · {t.rows.length} righe</div>
                     <TableView data={{ columns: t.columns.map((c) => c.name), rows: t.rows }} />
                   </div>
                 );
@@ -180,7 +193,7 @@ export default function Home() {
                 <>
                   <div className="caption">Risultato atteso</div>
                   <div className="tabella">
-                    <TableView data={atteso} />
+                    <TableView data={atteso} maxRighe={12} />
                   </div>
                 </>
               )}
@@ -213,7 +226,7 @@ export default function Home() {
                 <>
                   <div className="caption">Il tuo risultato</div>
                   <div className="tabella">
-                    <TableView data={risultato} />
+                    <TableView data={risultato} maxRighe={12} />
                   </div>
                 </>
               )}

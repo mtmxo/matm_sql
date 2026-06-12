@@ -47,6 +47,11 @@ header {
   margin: 0;
 }
 
+.nota {
+  font-size: 13px;
+  margin-top: 6px;
+}
+
 /* filtri */
 .filtri {
   display: flex;

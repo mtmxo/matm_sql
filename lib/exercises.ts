@@ -1,6 +1,6 @@
-export type Difficolta = "facile" | "medio" | "difficile";
-
-// Operatori che si possono filtrare con le checkbox.
+// Operatori filtrabili con le checkbox. Funzionano come "tetto": un esercizio
+// compare solo se usa esclusivamente operatori spuntati. Cosi chi studia un
+// operatore alla volta non si trova davanti cose che non ha ancora imparato.
 export const OPERATORI = [
   "WHERE",
   "ORDER BY",
@@ -16,19 +16,27 @@ export const OPERATORI = [
 
 export type Operatore = (typeof OPERATORI)[number];
 
+// I 5 livelli, da chi parte da zero a chi e esperto.
+export const LIVELLI = [
+  { n: 1, nome: "Principiante" },
+  { n: 2, nome: "Base" },
+  { n: 3, nome: "Intermedio" },
+  { n: 4, nome: "Avanzato" },
+  { n: 5, nome: "Esperto" },
+];
+
 export type Esercizio = {
   id: number;
   tipo: string;
-  difficolta: Difficolta;
+  livello: number;
   domanda: string;
   tabelle: string[];
   operatori: Operatore[];
   soluzione: string;
 };
 
-// Una variante è il singolo esercizio prodotto da un generatore.
-// "tipo" identifica lo schema (non i valori): serve a non riproporre due
-// volte di fila lo stesso esercizio cambiando solo un numero.
+// "tipo" identifica lo schema dell'esercizio (non i valori): serve a non
+// riproporre due volte di fila la stessa query con solo un numero diverso.
 type Variante = {
   tipo: string;
   domanda: string;
@@ -37,7 +45,7 @@ type Variante = {
 };
 
 type Generatore = {
-  difficolta: Difficolta;
+  livello: number;
   tabelle: string[];
   operatori: Operatore[];
   crea: () => Variante;
@@ -48,9 +56,9 @@ function pesca<T>(arr: T[]): T {
 }
 
 export const GENERATORI: Generatore[] = [
-  // ---- facile (tabella prodotti) ----
+  // ===== Livello 1: una tabella, SELECT con WHERE semplice o ORDER BY =====
   {
-    difficolta: "facile",
+    livello: 1,
     tabelle: ["prodotti"],
     operatori: ["WHERE"],
     crea: () => {
@@ -60,32 +68,24 @@ export const GENERATORI: Generatore[] = [
           return { tipo: "cat_eq", sql: `categoria = '${cat}'`, txt: `della categoria '${cat}'` };
         },
         () => {
-          const cat = pesca(["Informatica", "Alimentari", "Cancelleria"]);
-          return { tipo: "cat_neq", sql: `categoria <> '${cat}'`, txt: `che non sono della categoria '${cat}'` };
-        },
-        () => {
-          const s = pesca([5, 10, 20, 50, 100]);
+          const s = pesca([10, 20, 50, 100]);
           return { tipo: "prezzo_gt", sql: `prezzo > ${s}`, txt: `con prezzo maggiore di ${s} euro` };
         },
         () => {
-          const s = pesca([5, 10, 20, 50]);
+          const s = pesca([20, 50, 100]);
           return { tipo: "prezzo_lt", sql: `prezzo < ${s}`, txt: `con prezzo minore di ${s} euro` };
-        },
-        () => {
-          const s = pesca([10, 50, 100, 200]);
-          return { tipo: "scorte_gt", sql: `scorte > ${s}`, txt: `con piu di ${s} pezzi in magazzino` };
         },
         () => ({ tipo: "scorte_zero", sql: `scorte = 0`, txt: `esauriti (scorte a zero)` }),
       ])();
       return {
-        tipo: `f_where_${c.tipo}`,
+        tipo: `l1_where_${c.tipo}`,
         domanda: `Mostra nome e prezzo dei prodotti ${c.txt}.`,
         soluzione: `SELECT nome, prezzo FROM prodotti WHERE ${c.sql}`,
       };
     },
   },
   {
-    difficolta: "facile",
+    livello: 1,
     tabelle: ["prodotti"],
     operatori: ["ORDER BY"],
     crea: () => {
@@ -99,14 +99,43 @@ export const GENERATORI: Generatore[] = [
         { s: "DESC", t: "decrescente" },
       ]);
       return {
-        tipo: `f_order_${campo.c}`,
+        tipo: `l1_order_${campo.c}`,
         domanda: `Elenca i prodotti ordinati per ${campo.t} in ordine ${verso.t}.`,
         soluzione: `SELECT nome, ${campo.c} FROM prodotti ORDER BY ${campo.c} ${verso.s}`,
       };
     },
   },
+
+  // ===== Livello 2: una tabella, condizioni piu ricche =====
   {
-    difficolta: "facile",
+    livello: 2,
+    tabelle: ["prodotti"],
+    operatori: ["WHERE"],
+    crea: () => {
+      // due condizioni con AND/OR
+      const cat = pesca(["Informatica", "Alimentari", "Cancelleria"]);
+      const s = pesca([20, 50, 100]);
+      const v = pesca([
+        {
+          tipo: "and",
+          sql: `categoria = '${cat}' AND prezzo > ${s}`,
+          txt: `di categoria '${cat}' con prezzo maggiore di ${s} euro`,
+        },
+        {
+          tipo: "or",
+          sql: `prezzo < ${s} OR scorte = 0`,
+          txt: `con prezzo sotto i ${s} euro oppure esauriti`,
+        },
+      ]);
+      return {
+        tipo: `l2_where_${v.tipo}`,
+        domanda: `Mostra i prodotti ${v.txt}.`,
+        soluzione: `SELECT nome, categoria, prezzo FROM prodotti WHERE ${v.sql}`,
+      };
+    },
+  },
+  {
+    livello: 2,
     tabelle: ["prodotti"],
     operatori: ["WHERE", "LIKE"],
     crea: () => {
@@ -117,44 +146,72 @@ export const GENERATORI: Generatore[] = [
         { tipo: "finisce", sql: `'%${l}'`, txt: `finisce per '${l}'` },
       ]);
       return {
-        tipo: `f_like_${modo.tipo}`,
+        tipo: `l2_like_${modo.tipo}`,
         domanda: `Trova i prodotti il cui nome ${modo.txt}.`,
         soluzione: `SELECT nome FROM prodotti WHERE nome LIKE ${modo.sql}`,
       };
     },
   },
   {
-    difficolta: "facile",
+    livello: 2,
     tabelle: ["prodotti"],
     operatori: ["WHERE", "BETWEEN"],
     crea: () => {
       const campo = pesca([
-        { c: "prezzo", t: "prezzo", min: [1, 2, 3], max: [20, 30, 50] },
-        { c: "scorte", t: "scorte", min: [10, 20], max: [80, 100, 300] },
+        { c: "prezzo", t: "prezzo", min: [1, 2, 5], max: [50, 100, 150] },
+        { c: "scorte", t: "scorte", min: [10, 20], max: [100, 200] },
       ]);
       const min = pesca(campo.min);
       const max = pesca(campo.max);
       return {
-        tipo: `f_between_${campo.c}`,
+        tipo: `l2_between_${campo.c}`,
         domanda: `Mostra i prodotti con ${campo.t} compreso tra ${min} e ${max}.`,
         soluzione: `SELECT nome, ${campo.c} FROM prodotti WHERE ${campo.c} BETWEEN ${min} AND ${max}`,
       };
     },
   },
   {
-    difficolta: "facile",
+    livello: 2,
     tabelle: ["prodotti"],
     operatori: ["DISTINCT"],
     crea: () => ({
-      tipo: "f_distinct",
+      tipo: "l2_distinct",
       domanda: "Elenca le categorie distinte presenti tra i prodotti.",
       soluzione: "SELECT DISTINCT categoria FROM prodotti",
     }),
   },
-
-  // ---- medio (clienti + ordini) ----
   {
-    difficolta: "medio",
+    livello: 2,
+    tabelle: ["prodotti"],
+    operatori: ["AGGREGATI"],
+    crea: () => {
+      const agg = pesca([
+        { tipo: "count", sql: "COUNT(*)", alias: "totale", txt: "Conta quanti prodotti ci sono" },
+        { tipo: "avg", sql: "AVG(prezzo)", alias: "prezzo_medio", txt: "Calcola il prezzo medio dei prodotti" },
+        { tipo: "max", sql: "MAX(prezzo)", alias: "prezzo_max", txt: "Trova il prezzo piu alto" },
+        { tipo: "sum", sql: "SUM(scorte)", alias: "scorte_totali", txt: "Calcola il totale delle scorte" },
+      ]);
+      return {
+        tipo: `l2_agg_${agg.tipo}`,
+        domanda: `${agg.txt}.`,
+        soluzione: `SELECT ${agg.sql} AS ${agg.alias} FROM prodotti`,
+      };
+    },
+  },
+
+  // ===== Livello 3: due tabelle in JOIN, aggregati con GROUP BY =====
+  {
+    livello: 3,
+    tabelle: ["clienti", "ordini"],
+    operatori: ["JOIN"],
+    crea: () => ({
+      tipo: "l3_join",
+      domanda: "Mostra il nome del cliente e il totale di ogni suo ordine.",
+      soluzione: "SELECT clienti.nome, ordini.totale FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id",
+    }),
+  },
+  {
+    livello: 3,
     tabelle: ["clienti", "ordini"],
     operatori: ["JOIN", "WHERE"],
     crea: () => {
@@ -164,23 +221,35 @@ export const GENERATORI: Generatore[] = [
           return { tipo: "citta", sql: `clienti.citta = '${citta}'`, txt: `dei clienti di ${citta}` };
         },
         () => {
-          const s = pesca([30, 50, 100]);
+          const s = pesca([50, 100, 150]);
           return { tipo: "totale", sql: `ordini.totale > ${s}`, txt: `con totale superiore a ${s} euro` };
-        },
-        () => {
-          const d = pesca(["2024-02-01", "2024-03-01"]);
-          return { tipo: "data", sql: `ordini.data >= '${d}'`, txt: `effettuati dal ${d} in poi` };
         },
       ])();
       return {
-        tipo: `m_join_${c.tipo}`,
+        tipo: `l3_joinwhere_${c.tipo}`,
         domanda: `Mostra nome del cliente e totale degli ordini ${c.txt}.`,
         soluzione: `SELECT clienti.nome, ordini.totale FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id WHERE ${c.sql}`,
       };
     },
   },
   {
-    difficolta: "medio",
+    livello: 3,
+    tabelle: ["prodotti"],
+    operatori: ["GROUP BY", "AGGREGATI"],
+    crea: () => {
+      const agg = pesca([
+        { tipo: "count", sql: "COUNT(*)", alias: "quanti", txt: "quanti prodotti contiene" },
+        { tipo: "avg", sql: "AVG(prezzo)", alias: "prezzo_medio", txt: "il prezzo medio" },
+      ]);
+      return {
+        tipo: `l3_group_${agg.tipo}`,
+        domanda: `Per ogni categoria mostra ${agg.txt}.`,
+        soluzione: `SELECT categoria, ${agg.sql} AS ${agg.alias} FROM prodotti GROUP BY categoria`,
+      };
+    },
+  },
+  {
+    livello: 3,
     tabelle: ["clienti", "ordini"],
     operatori: ["JOIN", "GROUP BY", "AGGREGATI"],
     crea: () => {
@@ -192,45 +261,53 @@ export const GENERATORI: Generatore[] = [
         { tipo: "count", fn: "COUNT(ordini.id)", alias: "num_ordini", txt: "il numero di ordini" },
         { tipo: "sum", fn: "SUM(ordini.totale)", alias: "totale", txt: "la spesa totale" },
         { tipo: "avg", fn: "AVG(ordini.totale)", alias: "media", txt: "la spesa media" },
-        { tipo: "max", fn: "MAX(ordini.totale)", alias: "massimo", txt: "l'ordine piu alto" },
       ]);
       return {
-        tipo: `m_group_${grp.et}_${agg.tipo}`,
+        tipo: `l3_joingroup_${grp.et}_${agg.tipo}`,
         domanda: `Per ogni ${grp.et}, calcola ${agg.txt}.`,
         soluzione: `SELECT ${grp.by} AS ${grp.et}, ${agg.fn} AS ${agg.alias} FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY ${grp.by}`,
       };
     },
   },
+
+  // ===== Livello 4: piu tabelle, GROUP BY + HAVING, ORDER BY su aggregati =====
   {
-    difficolta: "medio",
+    livello: 4,
+    tabelle: ["prodotti"],
+    operatori: ["GROUP BY", "HAVING", "AGGREGATI"],
+    crea: () => {
+      const n = pesca([2, 3, 4]);
+      return {
+        tipo: "l4_having_categoria",
+        domanda: `Mostra le categorie che contengono piu di ${n} prodotti.`,
+        soluzione: `SELECT categoria, COUNT(*) AS quanti FROM prodotti GROUP BY categoria HAVING COUNT(*) > ${n}`,
+      };
+    },
+  },
+  {
+    livello: 4,
     tabelle: ["clienti", "ordini"],
     operatori: ["JOIN", "GROUP BY", "HAVING", "AGGREGATI"],
     crea: () => {
       const c = pesca([
         () => {
-          const s = pesca([50, 100, 150]);
+          const s = pesca([100, 200, 300]);
           return { tipo: "sum", sel: "SUM(ordini.totale) AS spesa", having: `SUM(ordini.totale) > ${s}`, txt: `hanno speso in totale piu di ${s} euro` };
         },
         () => {
-          const n = pesca([1, 2]);
+          const n = pesca([2, 3]);
           return { tipo: "count", sel: "COUNT(ordini.id) AS num_ordini", having: `COUNT(ordini.id) > ${n}`, txt: `hanno fatto piu di ${n} ordini` };
-        },
-        () => {
-          const s = pesca([40, 60, 80]);
-          return { tipo: "avg", sel: "AVG(ordini.totale) AS media", having: `AVG(ordini.totale) > ${s}`, txt: `hanno una spesa media superiore a ${s} euro` };
         },
       ])();
       return {
-        tipo: `m_having_${c.tipo}`,
+        tipo: `l4_having_${c.tipo}`,
         domanda: `Mostra i clienti che ${c.txt}.`,
         soluzione: `SELECT clienti.nome, ${c.sel} FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY clienti.nome HAVING ${c.having}`,
       };
     },
   },
-
-  // ---- difficile (studenti, corsi, voti) ----
   {
-    difficolta: "difficile",
+    livello: 4,
     tabelle: ["studenti", "corsi", "voti"],
     operatori: ["JOIN", "WHERE"],
     crea: () => {
@@ -238,25 +315,16 @@ export const GENERATORI: Generatore[] = [
         () => {
           const corso = pesca(["Matematica", "Informatica", "Storia"]);
           return {
-            tipo: "d_join_corso",
+            tipo: "l4_join3_corso",
             domanda: `Mostra nome studente e voto per gli esami del corso di ${corso}.`,
             soluzione: `SELECT studenti.nome, voti.voto FROM voti JOIN studenti ON voti.studente_id = studenti.id JOIN corsi ON voti.corso_id = corsi.id WHERE corsi.titolo = '${corso}'`,
             tabelle: ["studenti", "corsi", "voti"],
           };
         },
         () => {
-          const soglia = pesca([24, 26, 28]);
-          return {
-            tipo: "d_join_voto",
-            domanda: `Mostra nome studente e voto per i voti superiori a ${soglia}.`,
-            soluzione: `SELECT studenti.nome, voti.voto FROM studenti JOIN voti ON studenti.id = voti.studente_id WHERE voti.voto > ${soglia}`,
-            tabelle: ["studenti", "voti"],
-          };
-        },
-        () => {
           const anno = pesca([1, 2, 3]);
           return {
-            tipo: "d_join_anno",
+            tipo: "l4_join3_anno",
             domanda: `Mostra nome studente e voto degli studenti del ${anno}° anno.`,
             soluzione: `SELECT studenti.nome, voti.voto FROM studenti JOIN voti ON studenti.id = voti.studente_id WHERE studenti.anno = ${anno}`,
             tabelle: ["studenti", "voti"],
@@ -266,58 +334,93 @@ export const GENERATORI: Generatore[] = [
     },
   },
   {
-    difficolta: "difficile",
+    livello: 4,
     tabelle: ["studenti", "voti"],
     operatori: ["JOIN", "GROUP BY", "HAVING", "AGGREGATI"],
     crea: () => {
-      const c = pesca([
-        () => {
-          const s = pesca([22, 24, 25, 26]);
-          return { tipo: "avg", sel: "AVG(voti.voto) AS media", having: `AVG(voti.voto) >= ${s}`, txt: `media voti maggiore o uguale a ${s}` };
-        },
-        () => {
-          const n = pesca([1, 2]);
-          return { tipo: "count", sel: "COUNT(voti.id) AS esami", having: `COUNT(voti.id) > ${n}`, txt: `piu di ${n} esami sostenuti` };
-        },
-        () => {
-          const s = pesca([20, 22, 24]);
-          return { tipo: "min", sel: "MIN(voti.voto) AS minimo", having: `MIN(voti.voto) >= ${s}`, txt: `tutti i voti maggiori o uguali a ${s}` };
-        },
-      ])();
+      const s = pesca([22, 24, 25, 26]);
       return {
-        tipo: `d_having_${c.tipo}`,
-        domanda: `Mostra gli studenti con ${c.txt}.`,
-        soluzione: `SELECT studenti.nome, ${c.sel} FROM studenti JOIN voti ON studenti.id = voti.studente_id GROUP BY studenti.nome HAVING ${c.having}`,
+        tipo: "l4_media_studente",
+        domanda: `Mostra gli studenti con media voti maggiore o uguale a ${s}.`,
+        soluzione: `SELECT studenti.nome, AVG(voti.voto) AS media FROM studenti JOIN voti ON studenti.id = voti.studente_id GROUP BY studenti.nome HAVING AVG(voti.voto) >= ${s}`,
       };
     },
   },
   {
-    difficolta: "difficile",
+    livello: 4,
+    tabelle: ["clienti", "ordini"],
+    operatori: ["JOIN", "GROUP BY", "AGGREGATI", "ORDER BY"],
+    crea: () => ({
+      tipo: "l4_classifica",
+      domanda: "Mostra i clienti ordinati dalla spesa totale piu alta alla piu bassa.",
+      soluzione: "SELECT clienti.nome, SUM(ordini.totale) AS spesa FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY clienti.nome ORDER BY spesa DESC",
+    }),
+  },
+
+  // ===== Livello 5: subquery e query complesse =====
+  {
+    livello: 5,
+    tabelle: ["prodotti"],
+    operatori: ["WHERE", "SUBQUERY", "AGGREGATI"],
+    crea: () => {
+      const sub = pesca([
+        { tipo: "media", fn: "AVG(prezzo)", op: ">", txt: "superiore al prezzo medio" },
+        { tipo: "max", fn: "MAX(prezzo)", op: ">=", txt: "pari al prezzo massimo" },
+      ]);
+      return {
+        tipo: `l5_sub_prodotti_${sub.tipo}`,
+        domanda: `Trova i prodotti con prezzo ${sub.txt}.`,
+        soluzione: `SELECT nome, prezzo FROM prodotti WHERE prezzo ${sub.op} (SELECT ${sub.fn} FROM prodotti)`,
+      };
+    },
+  },
+  {
+    livello: 5,
     tabelle: ["studenti", "voti"],
     operatori: ["JOIN", "SUBQUERY", "AGGREGATI"],
     crea: () => {
       const sub = pesca([
-        { tipo: "avg", fn: "AVG(voto)", op: ">", txt: "superiore alla media generale dei voti" },
+        { tipo: "media", fn: "AVG(voto)", op: ">", txt: "superiore alla media generale dei voti" },
         { tipo: "max", fn: "MAX(voto)", op: ">=", txt: "pari al voto massimo registrato" },
-        { tipo: "min", fn: "MIN(voto)", op: ">", txt: "superiore al voto piu basso registrato" },
       ]);
       return {
-        tipo: `d_sub_${sub.tipo}`,
+        tipo: `l5_sub_voti_${sub.tipo}`,
         domanda: `Trova gli studenti che hanno preso almeno un voto ${sub.txt}.`,
         soluzione: `SELECT DISTINCT studenti.nome FROM studenti JOIN voti ON studenti.id = voti.studente_id WHERE voti.voto ${sub.op} (SELECT ${sub.fn} FROM voti)`,
       };
     },
   },
+  {
+    livello: 5,
+    tabelle: ["clienti", "ordini"],
+    operatori: ["JOIN", "SUBQUERY", "AGGREGATI"],
+    crea: () => ({
+      tipo: "l5_sub_spesa",
+      domanda: "Trova i clienti che hanno fatto almeno un ordine sopra la media dei totali.",
+      soluzione: "SELECT DISTINCT clienti.nome FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id WHERE ordini.totale > (SELECT AVG(totale) FROM ordini)",
+    }),
+  },
+  {
+    livello: 5,
+    tabelle: ["studenti", "voti"],
+    operatori: ["JOIN", "GROUP BY", "HAVING", "AGGREGATI", "SUBQUERY"],
+    crea: () => ({
+      tipo: "l5_media_sopra_media",
+      domanda: "Trova gli studenti la cui media voti supera la media generale di tutti i voti.",
+      soluzione: "SELECT studenti.nome, AVG(voti.voto) AS media FROM studenti JOIN voti ON studenti.id = voti.studente_id GROUP BY studenti.nome HAVING AVG(voti.voto) > (SELECT AVG(voto) FROM voti)",
+    }),
+  },
 ];
 
-// Generatori che rispettano i filtri scelti (difficolta + operatori ammessi).
+// Generatori che rispettano i filtri scelti: livello selezionato e operatori
+// tutti dentro la whitelist spuntata.
 export function generatoriCompatibili(
-  difficolta: Difficolta[],
+  livelli: number[],
   operatori: Operatore[]
 ): Generatore[] {
   return GENERATORI.filter(
     (g) =>
-      difficolta.includes(g.difficolta) &&
+      livelli.includes(g.livello) &&
       g.operatori.every((op) => operatori.includes(op))
   );
 }
@@ -329,7 +432,7 @@ export function nuovoEsercizio(generatori: Generatore[], id: number): Esercizio 
   return {
     id,
     tipo: v.tipo,
-    difficolta: g.difficolta,
+    livello: g.livello,
     tabelle: v.tabelle ?? g.tabelle,
     operatori: g.operatori,
     domanda: v.domanda,
