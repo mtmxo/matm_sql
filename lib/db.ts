@@ -3,11 +3,11 @@ import { buildSchemaSql } from "./data";
 
 let dbPromise: Promise<Database> | null = null;
 
-// Carica sql.js (il file .wasm arriva dal CDN) e crea il database in memoria.
+// Carica sql.js (il .wasm sta in /public) e crea il database in memoria.
 export function getDb(): Promise<Database> {
   if (!dbPromise) {
     dbPromise = initSqlJs({
-      locateFile: (f) => `https://sql.js.org/dist/${f}`,
+      locateFile: () => "/sql-wasm.wasm",
     }).then((SQL) => {
       const db = new SQL.Database();
       db.run(buildSchemaSql());
