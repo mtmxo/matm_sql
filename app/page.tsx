@@ -9,6 +9,7 @@ import {
   Operatore,
   Esercizio,
   LIVELLI,
+  conDipendenze,
   generatoriCompatibili,
   nuovoEsercizio,
 } from "@/lib/exercises";
@@ -105,9 +106,15 @@ export default function Home() {
   }
 
   function toggleOperatore(op: Operatore) {
-    setOpAttivi((prev) =>
-      prev.includes(op) ? prev.filter((x) => x !== op) : [...prev, op]
-    );
+    setOpAttivi((prev) => {
+      if (prev.includes(op)) {
+        // tolgo l'operatore e quelli che dipendono da lui
+        return prev.filter((x) => x !== op && !conDipendenze([x]).includes(op));
+      }
+      // aggiungo l'operatore con le sue dipendenze
+      const aggiunti = conDipendenze([op]);
+      return OPERATORI.filter((o) => prev.includes(o) || aggiunti.includes(o));
+    });
   }
 
   function toggleLivello(n: number) {
@@ -153,7 +160,7 @@ export default function Home() {
                 </label>
               ))}
             </div>
-            <p className="sub nota">Vedi solo esercizi che usano gli operatori spuntati: togli quelli che non hai ancora studiato.</p>
+            <p className="sub nota">Vedi solo esercizi che usano gli operatori spuntati. Le dipendenze si spuntano da sole (es. LIKE richiede WHERE, HAVING richiede GROUP BY).</p>
           </div>
         </div>
       </header>

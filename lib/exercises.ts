@@ -16,6 +16,33 @@ export const OPERATORI = [
 
 export type Operatore = (typeof OPERATORI)[number];
 
+// Operatori "richiesti" da un altro: LIKE/BETWEEN vivono dentro un WHERE,
+// GROUP BY ha bisogno di un aggregato, HAVING di GROUP BY, ecc.
+export const DIPENDENZE: Record<Operatore, Operatore[]> = {
+  "WHERE": [],
+  "ORDER BY": [],
+  "LIKE": ["WHERE"],
+  "BETWEEN": ["WHERE"],
+  "DISTINCT": [],
+  "JOIN": [],
+  "GROUP BY": ["AGGREGATI"],
+  "HAVING": ["GROUP BY", "AGGREGATI"],
+  "AGGREGATI": [],
+  "SUBQUERY": ["WHERE", "AGGREGATI"],
+};
+
+// Espande una lista di operatori includendo (in modo ricorsivo) le dipendenze.
+export function conDipendenze(operatori: Operatore[]): Operatore[] {
+  const trovati = new Set<Operatore>();
+  const aggiungi = (op: Operatore) => {
+    if (trovati.has(op)) return;
+    trovati.add(op);
+    DIPENDENZE[op].forEach(aggiungi);
+  };
+  operatori.forEach(aggiungi);
+  return OPERATORI.filter((o) => trovati.has(o));
+}
+
 // I 5 livelli, da chi parte da zero a chi e esperto.
 export const LIVELLI = [
   { n: 1, nome: "Principiante" },
