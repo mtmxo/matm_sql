@@ -87,6 +87,10 @@ header {
 }
 
 /* lista esercizi */
+aside button {
+  margin-bottom: 12px;
+}
+
 .lista {
   list-style: none;
   margin: 0;

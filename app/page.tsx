@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Database } from "sql.js";
 import { getDb, runQuery, QueryResult } from "@/lib/db";
 import { TABLE_MAP } from "@/lib/data";
 import {
-  ESERCIZI,
   OPERATORI,
   Operatore,
   Esercizio,
   Difficolta,
+  generatoriCompatibili,
+  nuovoEsercizio,
 } from "@/lib/exercises";
 import TableView from "./TableView";
 
@@ -30,7 +31,9 @@ export default function Home() {
   const [db, setDb] = useState<Database | null>(null);
   const [opAttivi, setOpAttivi] = useState<Operatore[]>([...OPERATORI]);
   const [diffAttive, setDiffAttive] = useState<Difficolta[]>([...DIFFICOLTA]);
+  const [esercizi, setEsercizi] = useState<Esercizio[]>([]);
   const [esercizioId, setEsercizioId] = useState<number | null>(null);
+  const idRef = useRef(0);
   const [query, setQuery] = useState("");
   const [risultato, setRisultato] = useState<QueryResult | null>(null);
   const [atteso, setAtteso] = useState<QueryResult | null>(null);
@@ -42,16 +45,34 @@ export default function Home() {
     getDb().then(setDb);
   }, []);
 
-  // Esercizi che rispettano i filtri scelti.
-  const eserciziFiltrati = useMemo(() => {
-    return ESERCIZI.filter(
-      (e) =>
-        diffAttive.includes(e.difficolta) &&
-        e.operatori.every((op) => opAttivi.includes(op))
-    );
+  // A ogni cambio di filtri rigenero una lista fresca di esercizi.
+  useEffect(() => {
+    const gen = generatoriCompatibili(diffAttive, opAttivi);
+    if (gen.length === 0) {
+      setEsercizi([]);
+      setEsercizioId(null);
+      return;
+    }
+    const lista: Esercizio[] = [];
+    for (let i = 0; i < 5; i++) {
+      idRef.current += 1;
+      lista.push(nuovoEsercizio(gen, idRef.current));
+    }
+    setEsercizi(lista);
+    setEsercizioId(null);
   }, [opAttivi, diffAttive]);
 
-  const esercizio = ESERCIZI.find((e) => e.id === esercizioId) || null;
+  const esercizio = esercizi.find((e) => e.id === esercizioId) || null;
+
+  // Aggiunge un nuovo esercizio in cima alla lista e lo apre.
+  function generaUno() {
+    const gen = generatoriCompatibili(diffAttive, opAttivi);
+    if (gen.length === 0) return;
+    idRef.current += 1;
+    const e = nuovoEsercizio(gen, idRef.current);
+    setEsercizi((prev) => [e, ...prev]);
+    apriEsercizio(e);
+  }
 
   // Quando cambio esercizio resetto l'area di lavoro e calcolo il risultato atteso.
   function apriEsercizio(e: Esercizio) {
@@ -142,9 +163,12 @@ export default function Home() {
       {db && (
         <div className="main">
           <aside>
-            <h2>Esercizi ({eserciziFiltrati.length})</h2>
+            <h2>Esercizi</h2>
+            <button onClick={generaUno} disabled={esercizi.length === 0}>
+              + Nuovo esercizio
+            </button>
             <ul className="lista">
-              {eserciziFiltrati.map((e) => (
+              {esercizi.map((e) => (
                 <li
                   key={e.id}
                   className={e.id === esercizioId ? "attivo" : ""}
@@ -154,7 +178,7 @@ export default function Home() {
                   <div>{e.domanda}</div>
                 </li>
               ))}
-              {eserciziFiltrati.length === 0 && (
+              {esercizi.length === 0 && (
                 <li>Nessun esercizio con questi filtri.</li>
               )}
             </ul>

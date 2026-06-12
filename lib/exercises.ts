@@ -25,108 +25,193 @@ export type Esercizio = {
   soluzione: string;
 };
 
-export const ESERCIZI: Esercizio[] = [
+// Un generatore produce un esercizio diverso a ogni chiamata (parametri casuali).
+type Generatore = {
+  difficolta: Difficolta;
+  tabelle: string[];
+  operatori: Operatore[];
+  crea: () => { domanda: string; soluzione: string };
+};
+
+function pesca<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+export const GENERATORI: Generatore[] = [
+  // ---- facile (tabella prodotti) ----
   {
-    id: 1,
     difficolta: "facile",
-    domanda: "Mostra nome e prezzo di tutti i prodotti della categoria 'Informatica'.",
     tabelle: ["prodotti"],
     operatori: ["WHERE"],
-    soluzione: "SELECT nome, prezzo FROM prodotti WHERE categoria = 'Informatica'",
+    crea: () => {
+      const c = pesca(["Informatica", "Alimentari", "Cancelleria"]);
+      return {
+        domanda: `Mostra nome e prezzo dei prodotti della categoria '${c}'.`,
+        soluzione: `SELECT nome, prezzo FROM prodotti WHERE categoria = '${c}'`,
+      };
+    },
   },
   {
-    id: 2,
     difficolta: "facile",
-    domanda: "Elenca tutti i prodotti ordinati per prezzo decrescente.",
+    tabelle: ["prodotti"],
+    operatori: ["WHERE"],
+    crea: () => {
+      const s = pesca([5, 10, 20, 50]);
+      return {
+        domanda: `Mostra nome e prezzo dei prodotti con prezzo maggiore di ${s} euro.`,
+        soluzione: `SELECT nome, prezzo FROM prodotti WHERE prezzo > ${s}`,
+      };
+    },
+  },
+  {
+    difficolta: "facile",
     tabelle: ["prodotti"],
     operatori: ["ORDER BY"],
-    soluzione: "SELECT nome, prezzo FROM prodotti ORDER BY prezzo DESC",
+    crea: () => {
+      const campo = pesca(["prezzo", "scorte"]);
+      const verso = pesca(["ASC", "DESC"]);
+      const versoIt = verso === "ASC" ? "crescente" : "decrescente";
+      return {
+        domanda: `Elenca i prodotti ordinati per ${campo} ${versoIt}.`,
+        soluzione: `SELECT nome, ${campo} FROM prodotti ORDER BY ${campo} ${verso}`,
+      };
+    },
   },
   {
-    id: 3,
     difficolta: "facile",
-    domanda: "Trova i prodotti il cui nome contiene la lettera 'a'.",
     tabelle: ["prodotti"],
     operatori: ["WHERE", "LIKE"],
-    soluzione: "SELECT nome FROM prodotti WHERE nome LIKE '%a%'",
+    crea: () => {
+      const l = pesca(["a", "e", "i", "o"]);
+      return {
+        domanda: `Trova i prodotti il cui nome contiene la lettera '${l}'.`,
+        soluzione: `SELECT nome FROM prodotti WHERE nome LIKE '%${l}%'`,
+      };
+    },
   },
   {
-    id: 4,
     difficolta: "facile",
-    domanda: "Mostra i prodotti con prezzo compreso tra 2 e 30 euro.",
     tabelle: ["prodotti"],
     operatori: ["WHERE", "BETWEEN"],
-    soluzione: "SELECT nome, prezzo FROM prodotti WHERE prezzo BETWEEN 2 AND 30",
+    crea: () => {
+      const min = pesca([1, 2, 3]);
+      const max = pesca([20, 30, 50]);
+      return {
+        domanda: `Mostra i prodotti con prezzo compreso tra ${min} e ${max} euro.`,
+        soluzione: `SELECT nome, prezzo FROM prodotti WHERE prezzo BETWEEN ${min} AND ${max}`,
+      };
+    },
   },
   {
-    id: 5,
     difficolta: "facile",
-    domanda: "Elenca le categorie distinte presenti tra i prodotti.",
     tabelle: ["prodotti"],
     operatori: ["DISTINCT"],
-    soluzione: "SELECT DISTINCT categoria FROM prodotti",
+    crea: () => ({
+      domanda: "Elenca le categorie distinte presenti tra i prodotti.",
+      soluzione: "SELECT DISTINCT categoria FROM prodotti",
+    }),
   },
+
+  // ---- medio (clienti + ordini) ----
   {
-    id: 6,
     difficolta: "medio",
-    domanda: "Mostra il nome del cliente e il totale di ogni suo ordine.",
     tabelle: ["clienti", "ordini"],
-    operatori: ["JOIN"],
-    soluzione:
-      "SELECT clienti.nome, ordini.totale FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id",
+    operatori: ["JOIN", "WHERE"],
+    crea: () => {
+      const citta = pesca(["Milano", "Roma", "Torino"]);
+      return {
+        domanda: `Mostra nome del cliente e totale di ogni ordine dei clienti di ${citta}.`,
+        soluzione: `SELECT clienti.nome, ordini.totale FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id WHERE clienti.citta = '${citta}'`,
+      };
+    },
   },
   {
-    id: 7,
     difficolta: "medio",
-    domanda: "Calcola quanti ordini ha fatto ogni cliente.",
-    tabelle: ["clienti", "ordini"],
-    operatori: ["JOIN", "GROUP BY", "AGGREGATI"],
-    soluzione:
-      "SELECT clienti.nome, COUNT(ordini.id) AS num_ordini FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY clienti.nome",
-  },
-  {
-    id: 8,
-    difficolta: "medio",
-    domanda: "Calcola la spesa totale per ogni città.",
     tabelle: ["clienti", "ordini"],
     operatori: ["JOIN", "GROUP BY", "AGGREGATI"],
-    soluzione:
-      "SELECT clienti.citta, SUM(ordini.totale) AS spesa FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY clienti.citta",
+    crea: () => {
+      const g = pesca([
+        { by: "clienti.nome", et: "cliente" },
+        { by: "clienti.citta", et: "citta" },
+      ]);
+      return {
+        domanda: `Conta quanti ordini ci sono per ogni ${g.et}.`,
+        soluzione: `SELECT ${g.by} AS ${g.et}, COUNT(ordini.id) AS num_ordini FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY ${g.by}`,
+      };
+    },
   },
   {
-    id: 9,
     difficolta: "medio",
-    domanda: "Mostra i clienti che hanno speso in totale piu di 100 euro.",
     tabelle: ["clienti", "ordini"],
     operatori: ["JOIN", "GROUP BY", "HAVING", "AGGREGATI"],
-    soluzione:
-      "SELECT clienti.nome, SUM(ordini.totale) AS spesa FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY clienti.nome HAVING SUM(ordini.totale) > 100",
+    crea: () => {
+      const s = pesca([50, 100, 150]);
+      return {
+        domanda: `Mostra i clienti che hanno speso in totale piu di ${s} euro.`,
+        soluzione: `SELECT clienti.nome, SUM(ordini.totale) AS spesa FROM clienti JOIN ordini ON clienti.id = ordini.cliente_id GROUP BY clienti.nome HAVING SUM(ordini.totale) > ${s}`,
+      };
+    },
   },
+
+  // ---- difficile (studenti, corsi, voti) ----
   {
-    id: 10,
     difficolta: "difficile",
-    domanda: "Mostra nome dello studente, titolo del corso e voto per ogni esame sostenuto.",
     tabelle: ["studenti", "corsi", "voti"],
-    operatori: ["JOIN"],
-    soluzione:
-      "SELECT studenti.nome, corsi.titolo, voti.voto FROM voti JOIN studenti ON voti.studente_id = studenti.id JOIN corsi ON voti.corso_id = corsi.id",
+    operatori: ["JOIN", "WHERE"],
+    crea: () => {
+      const corso = pesca(["Matematica", "Informatica", "Storia"]);
+      return {
+        domanda: `Mostra nome studente e voto per gli esami del corso di ${corso}.`,
+        soluzione: `SELECT studenti.nome, voti.voto FROM voti JOIN studenti ON voti.studente_id = studenti.id JOIN corsi ON voti.corso_id = corsi.id WHERE corsi.titolo = '${corso}'`,
+      };
+    },
   },
   {
-    id: 11,
     difficolta: "difficile",
-    domanda: "Calcola la media dei voti di ogni studente e mostra solo chi ha media >= 25.",
     tabelle: ["studenti", "voti"],
     operatori: ["JOIN", "GROUP BY", "HAVING", "AGGREGATI"],
-    soluzione:
-      "SELECT studenti.nome, AVG(voti.voto) AS media FROM studenti JOIN voti ON studenti.id = voti.studente_id GROUP BY studenti.nome HAVING AVG(voti.voto) >= 25",
+    crea: () => {
+      const s = pesca([22, 24, 25, 26]);
+      return {
+        domanda: `Calcola la media voti di ogni studente e mostra solo chi ha media maggiore o uguale a ${s}.`,
+        soluzione: `SELECT studenti.nome, AVG(voti.voto) AS media FROM studenti JOIN voti ON studenti.id = voti.studente_id GROUP BY studenti.nome HAVING AVG(voti.voto) >= ${s}`,
+      };
+    },
   },
   {
-    id: 12,
     difficolta: "difficile",
-    domanda: "Trova gli studenti che hanno preso un voto superiore alla media generale dei voti.",
     tabelle: ["studenti", "voti"],
     operatori: ["JOIN", "SUBQUERY", "AGGREGATI"],
-    soluzione:
-      "SELECT DISTINCT studenti.nome FROM studenti JOIN voti ON studenti.id = voti.studente_id WHERE voti.voto > (SELECT AVG(voto) FROM voti)",
+    crea: () => ({
+      domanda: "Trova gli studenti che hanno preso almeno un voto superiore alla media generale dei voti.",
+      soluzione:
+        "SELECT DISTINCT studenti.nome FROM studenti JOIN voti ON studenti.id = voti.studente_id WHERE voti.voto > (SELECT AVG(voto) FROM voti)",
+    }),
   },
 ];
+
+// Generatori che rispettano i filtri scelti (difficolta + operatori ammessi).
+export function generatoriCompatibili(
+  difficolta: Difficolta[],
+  operatori: Operatore[]
+): Generatore[] {
+  return GENERATORI.filter(
+    (g) =>
+      difficolta.includes(g.difficolta) &&
+      g.operatori.every((op) => operatori.includes(op))
+  );
+}
+
+// Crea un esercizio pescando a caso tra i generatori passati.
+export function nuovoEsercizio(generatori: Generatore[], id: number): Esercizio {
+  const g = pesca(generatori);
+  const { domanda, soluzione } = g.crea();
+  return {
+    id,
+    difficolta: g.difficolta,
+    tabelle: g.tabelle,
+    operatori: g.operatori,
+    domanda,
+    soluzione,
+  };
+}
