@@ -55,12 +55,20 @@ export const LIVELLI = [
 export type Esercizio = {
   id: number;
   tipo: string;
+  tema: string;
   livello: number;
   domanda: string;
   tabelle: string[];
   operatori: Operatore[];
   soluzione: string;
 };
+
+// Il tema (dominio) di un esercizio in base alle tabelle che usa.
+function temaDa(tabelle: string[]): string {
+  if (tabelle.some((t) => t === "studenti" || t === "corsi" || t === "voti")) return "scuola";
+  if (tabelle.some((t) => t === "clienti" || t === "ordini")) return "ordini";
+  return "prodotti";
+}
 
 // "tipo" identifica lo schema dell'esercizio (non i valori): serve a non
 // riproporre due volte di fila la stessa query con solo un numero diverso.
@@ -129,6 +137,49 @@ export const GENERATORI: Generatore[] = [
         tipo: `l1_order_${campo.c}`,
         domanda: `Elenca i prodotti ordinati per ${campo.t} in ordine ${verso.t}.`,
         soluzione: `SELECT nome, ${campo.c} FROM prodotti ORDER BY ${campo.c} ${verso.s}`,
+      };
+    },
+  },
+
+  {
+    livello: 1,
+    tabelle: ["clienti"],
+    operatori: ["WHERE"],
+    crea: () => {
+      const c = pesca(["Milano", "Roma", "Torino", "Napoli", "Bologna"]);
+      return {
+        tipo: "l1_clienti_citta",
+        domanda: `Mostra i clienti della citta di ${c}.`,
+        soluzione: `SELECT nome, citta FROM clienti WHERE citta = '${c}'`,
+      };
+    },
+  },
+  {
+    livello: 1,
+    tabelle: ["studenti"],
+    operatori: ["WHERE"],
+    crea: () => {
+      const a = pesca([1, 2, 3]);
+      return {
+        tipo: "l1_studenti_anno",
+        domanda: `Mostra gli studenti del ${a}° anno.`,
+        soluzione: `SELECT nome, anno FROM studenti WHERE anno = ${a}`,
+      };
+    },
+  },
+  {
+    livello: 1,
+    tabelle: ["studenti"],
+    operatori: ["ORDER BY"],
+    crea: () => {
+      const verso = pesca([
+        { s: "ASC", t: "crescente" },
+        { s: "DESC", t: "decrescente" },
+      ]);
+      return {
+        tipo: "l1_studenti_order",
+        domanda: `Elenca gli studenti ordinati per anno in ordine ${verso.t}.`,
+        soluzione: `SELECT nome, anno FROM studenti ORDER BY anno ${verso.s}`,
       };
     },
   },
@@ -222,6 +273,47 @@ export const GENERATORI: Generatore[] = [
         tipo: `l2_agg_${agg.tipo}`,
         domanda: `${agg.txt}.`,
         soluzione: `SELECT ${agg.sql} AS ${agg.alias} FROM prodotti`,
+      };
+    },
+  },
+
+  {
+    livello: 2,
+    tabelle: ["clienti"],
+    operatori: ["DISTINCT"],
+    crea: () => ({
+      tipo: "l2_clienti_distinct",
+      domanda: "Elenca le citta distinte in cui ci sono clienti.",
+      soluzione: "SELECT DISTINCT citta FROM clienti",
+    }),
+  },
+  {
+    livello: 2,
+    tabelle: ["ordini"],
+    operatori: ["WHERE", "BETWEEN"],
+    crea: () => {
+      const min = pesca([50, 100]);
+      const max = pesca([200, 250]);
+      return {
+        tipo: "l2_ordini_between",
+        domanda: `Mostra gli ordini con totale compreso tra ${min} e ${max} euro.`,
+        soluzione: `SELECT id, totale FROM ordini WHERE totale BETWEEN ${min} AND ${max}`,
+      };
+    },
+  },
+  {
+    livello: 2,
+    tabelle: ["studenti"],
+    operatori: ["AGGREGATI"],
+    crea: () => {
+      const a = pesca([
+        { tipo: "count", sql: "COUNT(*)", alias: "studenti", txt: "Conta quanti studenti ci sono" },
+        { tipo: "avg", sql: "AVG(anno)", alias: "anno_medio", txt: "Calcola l'anno medio degli studenti" },
+      ]);
+      return {
+        tipo: `l2_studenti_agg_${a.tipo}`,
+        domanda: `${a.txt}.`,
+        soluzione: `SELECT ${a.sql} AS ${a.alias} FROM studenti`,
       };
     },
   },
@@ -456,13 +548,37 @@ export function generatoriCompatibili(
 export function nuovoEsercizio(generatori: Generatore[], id: number): Esercizio {
   const g = pesca(generatori);
   const v = g.crea();
+  const tabelle = v.tabelle ?? g.tabelle;
   return {
     id,
     tipo: v.tipo,
+    tema: temaDa(tabelle),
     livello: g.livello,
-    tabelle: v.tabelle ?? g.tabelle,
+    tabelle,
     operatori: g.operatori,
     domanda: v.domanda,
     soluzione: v.soluzione,
   };
+}
+
+// Pesca un esercizio evitando i temi usati di recente e lo stesso schema di
+// fila. Se i filtri lasciano un solo tema, ripiega senza il vincolo.
+export function pescaEsercizio(
+  generatori: Generatore[],
+  id: number,
+  temiRecenti: string[],
+  tipoPrecedente: string | undefined
+): Esercizio {
+  let pool = generatori.filter((g) => !temiRecenti.includes(temaDa(g.tabelle)));
+  if (pool.length === 0 && temiRecenti.length > 0) {
+    const ultimo = temiRecenti[temiRecenti.length - 1];
+    pool = generatori.filter((g) => temaDa(g.tabelle) !== ultimo);
+  }
+  if (pool.length === 0) pool = generatori;
+
+  let e = nuovoEsercizio(pool, id);
+  for (let i = 0; i < 12 && e.tipo === tipoPrecedente; i++) {
+    e = nuovoEsercizio(pool, id);
+  }
+  return e;
 }

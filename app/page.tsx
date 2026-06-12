@@ -11,7 +11,7 @@ import {
   LIVELLI,
   conDipendenze,
   generatoriCompatibili,
-  nuovoEsercizio,
+  pescaEsercizio,
 } from "@/lib/exercises";
 import TableView from "./TableView";
 
@@ -56,6 +56,7 @@ export default function Home() {
   const [errore, setErrore] = useState<string | null>(null);
   const [caricando, setCaricando] = useState(true);
   const idRef = useRef(0);
+  const temiRecenti = useRef<string[]>([]);
 
   // Genera un nuovo esercizio (con i suoi dati) tra quelli compatibili coi filtri.
   async function caricaNuovo() {
@@ -75,13 +76,10 @@ export default function Home() {
     }
 
     setCaricando(true);
-    // pesco un esercizio evitando di ripetere lo stesso schema di fila
+    // pesco un esercizio lontano dai temi recenti e dallo schema precedente
     idRef.current += 1;
-    const precedente = esercizio?.tipo;
-    let e = nuovoEsercizio(gen, idRef.current);
-    for (let i = 0; i < 12 && e.tipo === precedente; i++) {
-      e = nuovoEsercizio(gen, idRef.current);
-    }
+    const e = pescaEsercizio(gen, idRef.current, temiRecenti.current, esercizio?.tipo);
+    temiRecenti.current = [...temiRecenti.current, e.tema].slice(-2);
 
     // i dati scalano col livello dell'esercizio
     const tabelle = generaDataset(e.livello);
