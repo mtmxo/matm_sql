@@ -82,11 +82,15 @@ export function generaDataset(livello: number): Table[] {
       { name: "id", type: "INTEGER" },
       { name: "nome", type: "TEXT" },
       { name: "citta", type: "TEXT" },
+      { name: "email", type: "TEXT" },
     ],
     rows: [],
   };
   for (let k = 1; k <= nClienti; k++) {
-    clienti.rows.push([k, pesca(COGNOMI), pesca(CITTA)]);
+    const cognome = pesca(COGNOMI);
+    // circa un terzo dei clienti non ha email registrata
+    const email = Math.random() < 0.33 ? null : `${cognome.toLowerCase()}${k}@mail.it`;
+    clienti.rows.push([k, cognome, pesca(CITTA), email]);
   }
 
   const ordini: Table = {

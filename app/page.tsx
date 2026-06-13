@@ -55,6 +55,9 @@ export default function Home() {
   const [dettaglio, setDettaglio] = useState<string | null>(null);
   const [errore, setErrore] = useState<string | null>(null);
   const [caricando, setCaricando] = useState(true);
+  // diventa true dopo aver letto le scelte salvate: prima di allora non genero
+  // esercizi ne salvo nulla, cosi non sovrascrivo lo storage con i default.
+  const [pronto, setPronto] = useState(false);
   const idRef = useRef(0);
   const temiRecenti = useRef<string[]>([]);
 
@@ -92,11 +95,32 @@ export default function Home() {
     setCaricando(false);
   }
 
-  // Ricarico quando cambiano i filtri (e al primo avvio).
+  // Al primo avvio recupero le scelte salvate dalla volta precedente.
   useEffect(() => {
+    try {
+      const l = localStorage.getItem("sql-trainer-livelli");
+      const o = localStorage.getItem("sql-trainer-operatori");
+      if (l) setLivelliAttivi(JSON.parse(l));
+      if (o) setOpAttivi(JSON.parse(o));
+    } catch {
+      // storage assente o corrotto: si parte dai default
+    }
+    setPronto(true);
+  }, []);
+
+  // Salvo i filtri a ogni modifica (ma solo dopo aver letto quelli salvati).
+  useEffect(() => {
+    if (!pronto) return;
+    localStorage.setItem("sql-trainer-livelli", JSON.stringify(livelliAttivi));
+    localStorage.setItem("sql-trainer-operatori", JSON.stringify(opAttivi));
+  }, [pronto, livelliAttivi, opAttivi]);
+
+  // Ricarico quando cambiano i filtri (e al primo avvio, una volta pronti).
+  useEffect(() => {
+    if (!pronto) return;
     caricaNuovo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [livelliAttivi, opAttivi]);
+  }, [pronto, livelliAttivi, opAttivi]);
 
   function esegui() {
     if (!db || !esercizio) return;
@@ -140,7 +164,7 @@ export default function Home() {
   return (
     <div className="container">
       <header>
-        <h1>matm_sql</h1>
+        <h1>sql-trainer</h1>
         <p className="sub">Allenati con le query SQL. Scrivi, esegui, confronta.</p>
 
         <div className="filtri">
@@ -203,21 +227,14 @@ export default function Home() {
                 const t = dataset.find((x) => x.name === nome);
                 if (!t) return null;
                 return (
-                  <div key={nome} className="tabella">
+                  <div key={nome}>
                     <div className="sub">{nome} · {t.rows.length} righe</div>
-                    <TableView data={{ columns: t.columns.map((c) => c.name), rows: t.rows }} />
+                    <div className="tabella">
+                      <TableView data={{ columns: t.columns.map((c) => c.name), rows: t.rows }} />
+                    </div>
                   </div>
                 );
               })}
-
-              {atteso && (
-                <>
-                  <div className="caption">Risultato atteso</div>
-                  <div className="tabella">
-                    <TableView data={atteso} maxRighe={12} />
-                  </div>
-                </>
-              )}
             </div>
 
             <div className="area-query">
@@ -245,14 +262,24 @@ export default function Home() {
 
               {errore && <div className="errore">Errore: {errore}</div>}
 
-              {risultato && (
-                <>
-                  <div className="caption">Il tuo risultato</div>
-                  <div className="tabella">
-                    <TableView data={risultato} maxRighe={12} />
+              <div className="risultati">
+                {atteso && (
+                  <div>
+                    <div className="caption">Risultato atteso</div>
+                    <div className="tabella">
+                      <TableView data={atteso} />
+                    </div>
                   </div>
-                </>
-              )}
+                )}
+                {risultato && (
+                  <div>
+                    <div className="caption">Il tuo risultato</div>
+                    <div className="tabella">
+                      <TableView data={risultato} />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </section>
